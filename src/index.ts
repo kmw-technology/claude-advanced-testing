@@ -15,6 +15,41 @@ import {
   runPlaywrightTest,
 } from "./tools/run-playwright-test.js";
 import { closeBrowser } from "./services/browser-manager.js";
+import {
+  startSessionSchema,
+  startSessionHandler,
+  endSessionSchema,
+  endSessionHandler,
+} from "./tools/session.js";
+import {
+  interactSchema,
+  interact,
+  formatInteractResult,
+} from "./tools/interact.js";
+import { readPageSchema, readPage, formatReadPageResult } from "./tools/read-page.js";
+import {
+  exploreAppSchema,
+  exploreApp,
+  formatExploreResult,
+} from "./tools/explore-app.js";
+import { endAllSessions } from "./services/session-manager.js";
+import {
+  collectFeedbackSchema,
+  handleCollectFeedback,
+  getFeedbackReportSchema,
+  handleGetFeedbackReport,
+} from "./tools/feedback.js";
+import {
+  startPersonaTestSchema,
+  handleStartPersonaTest,
+  endPersonaTestSchema,
+  handleEndPersonaTest,
+} from "./tools/persona-test.js";
+import {
+  siteAuditSchema,
+  siteAudit,
+  formatSiteAuditReport,
+} from "./tools/site-audit.js";
 
 const server = new McpServer({
   name: "claude-advanced-testing",
@@ -420,13 +455,333 @@ server.tool(
   }
 );
 
+// --- Tool: Start Session ---
+server.tool(
+  "start_session",
+  "Start a persistent browser session for interactive testing. The session stays open across multiple tool calls, preserving cookies, auth state, and navigation history. Returns a sessionId to use with interact, read_page, and explore_app.",
+  startSessionSchema.shape,
+  async (input) => {
+    try {
+      const result = await startSessionHandler(input);
+
+      let text = `Session started: ${result.session.id}\n`;
+      text += `Viewport: ${result.session.width}x${result.session.height}`;
+      if (result.session.deviceName) text += ` (${result.session.deviceName})`;
+      text += "\n";
+
+      if (result.pageState) {
+        text += `URL: ${result.pageState.url}\n`;
+        text += `Title: ${result.pageState.title}\n`;
+        text += `Interactive Elements: ${result.pageState.interactiveElements.length}\n`;
+        text += `Forms: ${result.pageState.forms.length}\n`;
+
+        if (result.pageState.visibleText) {
+          text += `\nVisible Text:\n${result.pageState.visibleText}\n`;
+        }
+      }
+
+      if (result.pageState?.screenshot) {
+        return {
+          content: [
+            { type: "text" as const, text },
+            {
+              type: "image" as const,
+              data: result.pageState.screenshot,
+              mimeType: "image/png",
+            },
+          ],
+        };
+      }
+
+      return { content: [{ type: "text" as const, text }] };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Failed to start session: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+);
+
+// --- Tool: End Session ---
+server.tool(
+  "end_session",
+  "Close a browser session and free its resources. Always call this when done testing.",
+  endSessionSchema.shape,
+  async (input) => {
+    try {
+      const message = await endSessionHandler(input);
+      return { content: [{ type: "text" as const, text: message }] };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Failed to end session: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+);
+
+// --- Tool: Interact ---
+server.tool(
+  "interact",
+  "Interact with a webpage in an active session: click buttons, fill forms, select options, navigate, press keys, scroll, and more. Uses smart element finding — target elements by their visible text, label, placeholder, ARIA role, test ID, or CSS selector. Returns the page state after the action including all interactive elements, forms, and notifications.",
+  interactSchema.shape,
+  async (input) => {
+    try {
+      const result = await interact(input);
+      const text = formatInteractResult(result);
+
+      if (result.pageState.screenshot) {
+        return {
+          content: [
+            { type: "text" as const, text },
+            {
+              type: "image" as const,
+              data: result.pageState.screenshot,
+              mimeType: "image/png",
+            },
+          ],
+          isError: !result.success ? true : undefined,
+        };
+      }
+
+      return {
+        content: [{ type: "text" as const, text }],
+        isError: !result.success ? true : undefined,
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Interaction failed: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+);
+
+// --- Tool: Read Page ---
+server.tool(
+  "read_page",
+  "Read the current state of a page in an active session. Returns all interactive elements (buttons, links, inputs), forms with their fields and current values, visible notifications/errors, and optionally a screenshot and visible text content. Use this to understand what's on the page before deciding what to do next.",
+  readPageSchema.shape,
+  async (input) => {
+    try {
+      const state = await readPage(input);
+      const text = formatReadPageResult(state);
+
+      if (state.screenshot) {
+        return {
+          content: [
+            { type: "text" as const, text },
+            {
+              type: "image" as const,
+              data: state.screenshot,
+              mimeType: "image/png",
+            },
+          ],
+        };
+      }
+
+      return { content: [{ type: "text" as const, text }] };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Read page failed: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+);
+
+// --- Tool: Explore App ---
+server.tool(
+  "explore_app",
+  "Automatically discover and map all pages of a web application. Crawls from a start URL, following links up to a configurable depth. For each page, extracts forms, interactive elements, and outgoing links. Supports authenticated crawling via an existing session. Returns a complete sitemap of the application.",
+  exploreAppSchema.shape,
+  async (input) => {
+    try {
+      const result = await exploreApp(input);
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: formatExploreResult(result),
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `App exploration failed: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+);
+
+// --- Tool: Collect Feedback ---
+server.tool(
+  "collect_feedback",
+  "Record a structured finding during a testing session. Categories: bug, ux_issue, confusion, accessibility_issue, performance_issue, missing_feature, positive. Severities: critical, major, minor, positive.",
+  collectFeedbackSchema.shape,
+  async (input) => {
+    try {
+      const result = await handleCollectFeedback(input);
+      return { content: [{ type: "text" as const, text: result }] };
+    } catch (err) {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+);
+
+// --- Tool: Get Feedback Report ---
+server.tool(
+  "get_feedback_report",
+  "Get an aggregated feedback report for a testing session. Optionally filter by category or severity.",
+  getFeedbackReportSchema.shape,
+  async (input) => {
+    try {
+      const result = await handleGetFeedbackReport(input);
+      return { content: [{ type: "text" as const, text: result }] };
+    } catch (err) {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+);
+
+// --- Tool: Site Audit ---
+server.tool(
+  "site_audit",
+  "Comprehensive site audit: crawl a website and run accessibility, performance, and SEO checks on every discovered page. Returns a structured report with findings aggregated by severity and page type.",
+  siteAuditSchema.shape,
+  async (input) => {
+    try {
+      const result = await siteAudit(input);
+      const text = formatSiteAuditReport(result);
+
+      const content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> = [
+        { type: "text" as const, text },
+      ];
+
+      // Include screenshots if captured
+      for (const page of result.pages) {
+        if (page.stages.capture.screenshotBase64) {
+          content.push({
+            type: "image" as const,
+            data: page.stages.capture.screenshotBase64,
+            mimeType: "image/png",
+          });
+        }
+      }
+
+      return { content };
+    } catch (err) {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+);
+
+// --- Tool: Start Persona Test ---
+server.tool(
+  "start_persona_test",
+  "Start a persona-based testing session. Define a user persona with goals, pain points, and tech savviness, then test a website from their perspective. Use interact and collect_feedback tools during the test, then end_persona_test for a report.",
+  startPersonaTestSchema.shape,
+  async (input) => {
+    try {
+      const result = await handleStartPersonaTest(input);
+      return { content: [{ type: "text" as const, text: result }] };
+    } catch (err) {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+);
+
+// --- Tool: End Persona Test ---
+server.tool(
+  "end_persona_test",
+  "End a persona-based testing session and get an aggregated report with all collected feedback, completed checklist items, and overall sentiment.",
+  endPersonaTestSchema.shape,
+  async (input) => {
+    try {
+      const result = await handleEndPersonaTest(input);
+      return { content: [{ type: "text" as const, text: result }] };
+    } catch (err) {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+);
+
 // --- Cleanup on exit ---
 process.on("SIGINT", async () => {
+  await endAllSessions();
   await closeBrowser();
   process.exit(0);
 });
 
 process.on("SIGTERM", async () => {
+  await endAllSessions();
   await closeBrowser();
   process.exit(0);
 });
