@@ -7,88 +7,90 @@ import {
 import { extractPageState } from "../services/page-state-extractor.js";
 import type { SessionInfo, PageState } from "../models/types.js";
 
-// --- start_session ---
-
-export const startSessionSchema = z.object({
+export const sessionSchema = z.object({
+  action: z
+    .enum(["start", "end"])
+    .describe('"start" to open a new browser session, "end" to close one'),
+  // For start:
   url: z
     .string()
     .url()
     .optional()
-    .describe("Initial URL to navigate to after session creation"),
+    .describe("Initial URL to navigate to (for start)"),
   width: z
     .number()
     .optional()
     .default(1280)
-    .describe("Viewport width in pixels"),
+    .describe("Viewport width in pixels (for start)"),
   height: z
     .number()
     .optional()
     .default(720)
-    .describe("Viewport height in pixels"),
+    .describe("Viewport height in pixels (for start)"),
   deviceName: z
     .string()
     .optional()
     .describe(
-      'Device to emulate, e.g. "iPhone 14", "iPad Pro 11". Overrides width/height.'
+      'Device to emulate, e.g. "iPhone 14", "iPad Pro 11" (for start)'
     ),
+  // For end:
+  sessionId: z
+    .string()
+    .optional()
+    .describe("Session ID to close (for end)"),
 });
 
-export type StartSessionInput = z.infer<typeof startSessionSchema>;
+export type SessionInput = z.infer<typeof sessionSchema>;
 
-export interface StartSessionResult {
-  session: SessionInfo;
+export interface SessionResult {
+  message: string;
+  session?: SessionInfo;
   pageState?: PageState;
 }
 
-export async function startSessionHandler(
-  input: StartSessionInput
-): Promise<StartSessionResult> {
-  const session = await createSession({
-    url: input.url,
-    width: input.width,
-    height: input.height,
-    deviceName: input.deviceName,
-  });
-
-  let pageState: PageState | undefined;
-  if (input.url) {
-    pageState = await extractPageState(session.page, {
-      includeScreenshot: true,
-      includeVisibleText: true,
-      consoleErrors: session.consoleErrors,
+export async function handleSession(
+  input: SessionInput
+): Promise<SessionResult> {
+  if (input.action === "start") {
+    const session = await createSession({
+      url: input.url,
+      width: input.width,
+      height: input.height,
+      deviceName: input.deviceName,
     });
+
+    let pageState: PageState | undefined;
+    if (input.url) {
+      pageState = await extractPageState(session.page, {
+        includeScreenshot: true,
+        includeVisibleText: true,
+        consoleErrors: session.consoleErrors,
+      });
+    }
+
+    const title = input.url ? await session.page.title() : "";
+
+    return {
+      message: `Session started: ${session.id}`,
+      session: {
+        id: session.id,
+        url: session.url,
+        title,
+        createdAt: session.createdAt,
+        lastAccessedAt: session.lastAccessedAt,
+        deviceName: session.deviceName,
+        width: session.width,
+        height: session.height,
+      },
+      pageState,
+    };
   }
 
-  const title = input.url ? await session.page.title() : "";
-
-  return {
-    session: {
-      id: session.id,
-      url: session.url,
-      title,
-      createdAt: session.createdAt,
-      lastAccessedAt: session.lastAccessedAt,
-      deviceName: session.deviceName,
-      width: session.width,
-      height: session.height,
-    },
-    pageState,
-  };
-}
-
-// --- end_session ---
-
-export const endSessionSchema = z.object({
-  sessionId: z.string().describe("The session ID to close"),
-});
-
-export type EndSessionInput = z.infer<typeof endSessionSchema>;
-
-export async function endSessionHandler(
-  input: EndSessionInput
-): Promise<string> {
-  // Verify session exists before ending
+  // action === "end"
+  if (!input.sessionId) {
+    throw new Error("sessionId is required to end a session");
+  }
   getSession(input.sessionId);
   await endSession(input.sessionId);
-  return `Session ${input.sessionId} closed successfully.`;
+  return { message: `Session ${input.sessionId} closed successfully.` };
 }
