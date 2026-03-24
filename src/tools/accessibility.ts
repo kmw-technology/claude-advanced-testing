@@ -200,9 +200,11 @@ export async function checkAccessibility(
       });
     }
 
-    // Accessibility tree snapshot for pass count estimation
-    const accessibilityTree = await page.accessibility.snapshot();
-    const passCount = accessibilityTree ? countNodes(accessibilityTree) : 0;
+    // Estimate pass count from total interactive elements on page
+    const passCount = await page.$$eval(
+      "a, button, input, select, textarea, [role], img, h1, h2, h3, h4, h5, h6",
+      (els) => els.length
+    );
 
     return {
       url: page.url(),
@@ -219,14 +221,4 @@ export async function checkAccessibility(
   } finally {
     await context.close();
   }
-}
-
-function countNodes(node: { children?: unknown[] }): number {
-  let count = 1;
-  if (node.children) {
-    for (const child of node.children) {
-      count += countNodes(child as { children?: unknown[] });
-    }
-  }
-  return count;
 }
