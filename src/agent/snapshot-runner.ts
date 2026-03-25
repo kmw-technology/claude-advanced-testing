@@ -66,11 +66,17 @@ export async function runAppSnapshot(
     language: config.language,
   };
 
+  const explorationBackend = config.agentConfig.backend;
   const explorationConfig: AgentConfig = {
     ...config.agentConfig,
-    backend: "openai",
-    snapshotCollector: collector,
+    // SnapshotCollector only captures tool data with OpenAI backend;
+    // with Claude Code, the exploration report text is still used.
+    snapshotCollector: explorationBackend === "openai" ? collector : undefined,
   };
+
+  if (verbose) {
+    console.error(`[snapshot] Exploration backend: ${explorationBackend}\n`);
+  }
 
   const explorationResult = await runAgent(explorationTask, explorationConfig);
   const snapshot = collector.finalize(explorationResult.finalAnswer);

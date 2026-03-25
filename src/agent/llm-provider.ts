@@ -98,14 +98,19 @@ class ClaudeCodeLLMProvider implements LLMProvider {
     return new Promise<string>((resolve, reject) => {
       let settled = false;
 
+      // Pipe prompt via stdin to avoid Windows command line length limits
       const child = spawn(
         this.claudePath,
-        ["-p", fullPrompt, "--output-format", "json", "--no-session-persistence"],
+        ["-p", "-", "--output-format", "json", "--no-session-persistence"],
         {
-          stdio: ["ignore", "pipe", "pipe"],
+          stdio: ["pipe", "pipe", "pipe"],
           env: { ...process.env },
         }
       );
+
+      // Write prompt to stdin
+      child.stdin.write(fullPrompt);
+      child.stdin.end();
 
       let stdout = "";
       let stderr = "";

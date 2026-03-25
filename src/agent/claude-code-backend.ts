@@ -24,7 +24,7 @@ export class ClaudeCodeBackend {
     const serverPath = resolve(__dirname, "../../dist/index.js");
     const mcpConfig = {
       mcpServers: {
-        testing: {
+        "advanced-testing": {
           command: "node",
           args: [serverPath],
         },
@@ -51,17 +51,8 @@ export class ClaudeCodeBackend {
     //    --allowedTools: grant MCP tool permissions so Claude Code doesn't prompt
     //    --permission-mode default: no extra permissions beyond allowedTools
     //    --no-session-persistence: don't save this agent run to session history
-    const allowedTools = [
-      "mcp__testing__test_website",
-      "mcp__testing__session",
-      "mcp__testing__interact",
-      "mcp__testing__read_page",
-      "mcp__testing__explore_app",
-      "mcp__testing__run_test",
-      "mcp__testing__persona_test",
-    ];
-
     const child = spawn(this.claudePath, [
+      "--strict-mcp-config",
       "--mcp-config",
       configPath,
       "-p",
@@ -69,7 +60,13 @@ export class ClaudeCodeBackend {
       "--output-format",
       "json",
       "--allowedTools",
-      allowedTools.join(","),
+      "mcp__advanced-testing__test_website",
+      "mcp__advanced-testing__session",
+      "mcp__advanced-testing__interact",
+      "mcp__advanced-testing__read_page",
+      "mcp__advanced-testing__explore_app",
+      "mcp__advanced-testing__run_test",
+      "mcp__advanced-testing__persona_test",
       "--no-session-persistence",
     ], {
       stdio: ["ignore", "pipe", "pipe"],

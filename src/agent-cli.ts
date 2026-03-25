@@ -218,8 +218,9 @@ async function main(): Promise<void> {
       process.exit(1);
     }
 
-    const llm = args.llmBackend ?? "openai";
-    console.error(`\nApp Snapshot starting (${args.personas ?? 4} personas, LLM: ${llm})...\n`);
+    const explore = args.backend;
+    const llm = args.llmBackend ?? args.backend; // default LLM backend = exploration backend
+    console.error(`\nApp Snapshot starting (${args.personas ?? 4} personas, explore: ${explore}, LLM: ${llm})...\n`);
 
     try {
       const result = await runAppSnapshot({
@@ -228,7 +229,7 @@ async function main(): Promise<void> {
         language: args.language,
         llmBackend: llm,
         agentConfig: {
-          backend: "openai",
+          backend: explore,
           openaiModel: args.model,
           maxSteps: args.maxSteps,
           verbose: args.verbose,
