@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { runAgent, formatAgentResult } from "./agent/runner.js";
+import { runAppSnapshot, formatSnapshotResult } from "./agent/snapshot-runner.js";
 import type { AgentConfig, AgentTask, TaskPreset } from "./agent/types.js";
 
 const VALID_PRESETS = ["quick", "deep", "security", "accessibility", "performance", "market-ready"];
@@ -20,6 +21,8 @@ function parseArgs(argv: string[]): {
   timeout?: number;
   tools?: string[];
   help?: boolean;
+  snapshot?: boolean;
+  personas?: number;
 } {
   const result: ReturnType<typeof parseArgs> = {
     backend: "openai",
@@ -98,6 +101,13 @@ function parseArgs(argv: string[]): {
       case "-v":
         result.verbose = true;
         break;
+      case "--snapshot":
+        result.snapshot = true;
+        break;
+      case "--personas":
+        result.personas = parseInt(next ?? "4", 10);
+        i++;
+        break;
       case "--help":
       case "-h":
         result.help = true;
@@ -139,6 +149,10 @@ Options:
   --persona-name <name>     Persona name for persona-based testing
   --persona-role <role>     Persona role (e.g. "first-time visitor")
   --persona-goals <list>    Comma-separated persona goals
+  --snapshot                App Snapshot mode: explore once, then LLM-generate
+                              tailored personas that evaluate the app (no extra
+                              browser sessions). Requires OPENAI_API_KEY.
+  --personas <n>            Number of personas for snapshot mode (default: 4)
   --help, -h                Show this help
 
 Examples:
@@ -156,6 +170,9 @@ Examples:
   # Product-sense market readiness evaluation
   node dist/agent-cli.js -b claude-code --preset market-ready \\
     -t "Evaluate if this app is ready for customers" -u https://app.example.com
+
+  # App Snapshot: explore once, generate tailored personas, aggregate findings
+  node dist/agent-cli.js --snapshot -u https://app.example.com --personas 4 -v
 
   # Persona test
   node dist/agent-cli.js -b claude-code --preset deep \\
@@ -175,6 +192,36 @@ async function main(): Promise<void> {
   if (args.help) {
     printHelp();
     process.exit(0);
+  }
+
+  // Snapshot mode
+  if (args.snapshot) {
+    if (!args.url) {
+      console.error("Error: --url is required for --snapshot mode. Use --help for usage.");
+      process.exit(1);
+    }
+
+    console.error(`\nApp Snapshot starting (${args.personas ?? 4} personas)...\n`);
+
+    try {
+      const result = await runAppSnapshot({
+        url: args.url,
+        personaCount: args.personas,
+        language: args.language,
+        agentConfig: {
+          backend: "openai",
+          openaiModel: args.model,
+          maxSteps: args.maxSteps,
+          verbose: args.verbose,
+          timeout: args.timeout ?? 600000,
+        },
+      });
+      console.log(formatSnapshotResult(result));
+      process.exit(0);
+    } catch (err) {
+      console.error(`\nFatal error: ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(1);
+    }
   }
 
   if (!args.task) {

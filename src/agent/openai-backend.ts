@@ -80,6 +80,11 @@ export class OpenAIBackend {
       // Add assistant message to history
       messages.push(choice.message);
 
+      // Snapshot: record agent reasoning
+      if (config.snapshotCollector && choice.message.content) {
+        config.snapshotCollector.recordObservation(iteration, choice.message.content);
+      }
+
       // No tool calls — agent is done
       if (
         choice.finish_reason === "stop" ||
@@ -133,6 +138,13 @@ export class OpenAIBackend {
         const callStart = Date.now();
         const result = await executeToolCall(toolName, args);
         const callDuration = Date.now() - callStart;
+
+        // Snapshot: record full output + screenshots BEFORE truncation
+        if (config.snapshotCollector) {
+          config.snapshotCollector.recordToolCall(
+            steps.length + 1, toolName, args, result, callDuration
+          );
+        }
 
         // Truncate output intelligently
         const output = this.truncateOutput(result.text, toolName);

@@ -14,6 +14,9 @@ export interface AgentConfig {
   maxSteps?: number; // default: 50
   verbose?: boolean; // log each step to stderr
   timeout?: number; // total timeout ms (default: 300000)
+
+  // Snapshot mode
+  snapshotCollector?: import("../services/snapshot-collector.js").SnapshotCollector;
 }
 
 // --- Task Presets ---
