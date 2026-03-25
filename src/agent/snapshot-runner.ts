@@ -1,4 +1,3 @@
-import OpenAI from "openai";
 import { writeFileSync } from "fs";
 import { join } from "path";
 import type { AgentConfig, AgentTask } from "./types.js";
@@ -16,12 +15,15 @@ import {
   buildPersonaEvaluationPrompt,
   buildAggregationPrompt,
 } from "./snapshot-prompts.js";
+import { createLLMProvider } from "./llm-provider.js";
 
 export interface SnapshotConfig {
   url: string;
   personaCount?: number;
   language?: string;
   agentConfig: AgentConfig;
+  /** LLM backend for phases 2-4 (persona gen, evaluation, aggregation). Defaults to "openai". */
+  llmBackend?: "openai" | "claude-code";
 }
 
 /**
@@ -37,21 +39,23 @@ export async function runAppSnapshot(
   const startTime = Date.now();
   const verbose = config.agentConfig.verbose ?? false;
   const personaCount = config.personaCount ?? 4;
-  const model = config.agentConfig.openaiModel ?? "gpt-5-mini";
 
-  // Ensure we have an OpenAI API key
-  const apiKey =
-    config.agentConfig.openaiApiKey ?? process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error(
-      "OpenAI API key required for snapshot mode. Set OPENAI_API_KEY."
-    );
+  // Create LLM provider for phases 2-4 (persona gen, evaluation, aggregation)
+  const llmBackend = config.llmBackend ?? "openai";
+  const provider = createLLMProvider({
+    backend: llmBackend,
+    verbose,
+    openaiApiKey: config.agentConfig.openaiApiKey,
+    openaiModel: config.agentConfig.openaiModel,
+    claudeCodePath: config.agentConfig.claudeCodePath,
+  });
+
+  if (verbose) {
+    console.error(`[snapshot] LLM provider for evaluation: ${provider.name}\n`);
   }
 
-  const client = new OpenAI({ apiKey });
-
   // --- Phase 1: Exploration ---
-  if (verbose) console.error("\n[snapshot] Phase 1: Exploring the app...\n");
+  if (verbose) console.error("[snapshot] Phase 1: Exploring the app...\n");
 
   const collector = new SnapshotCollector(config.url);
 
@@ -90,7 +94,7 @@ export async function runAppSnapshot(
     config.language
   );
 
-  const personaResponse = await callLLM(client, model, personaPrompt, verbose);
+  const personaResponse = await provider.call(personaPrompt);
   const personaData = parseJSON<{
     appSummary: string;
     targetAudience: string;
@@ -131,7 +135,7 @@ export async function runAppSnapshot(
       config.language
     );
 
-    const evalResponse = await callLLM(client, model, evalPrompt, verbose);
+    const evalResponse = await provider.call(evalPrompt);
     const evalData = parseJSON<Omit<PersonaEvaluation, "persona" | "rawReport">>(evalResponse);
 
     evaluations.push({
@@ -165,7 +169,7 @@ export async function runAppSnapshot(
     config.language
   );
 
-  const aggResponse = await callLLM(client, model, aggPrompt, verbose);
+  const aggResponse = await provider.call(aggPrompt);
   const aggData = parseJSON<Omit<CrossPersonaAggregation, "personaCount" | "evaluations" | "rawReport">>(aggResponse);
 
   const aggregation: CrossPersonaAggregation = {
@@ -205,36 +209,6 @@ export async function runAppSnapshot(
     snapshotDir: collector.getSnapshotDir(),
     totalDurationMs: Date.now() - startTime,
   };
-}
-
-/**
- * Make a single LLM call expecting JSON output.
- */
-async function callLLM(
-  client: OpenAI,
-  model: string,
-  prompt: string,
-  verbose: boolean
-): Promise<string> {
-  try {
-    const response = await client.chat.completions.create({
-      model,
-      messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" },
-      temperature: 0.7,
-    });
-
-    const content = response.choices[0]?.message?.content ?? "";
-    if (verbose) {
-      const tokens = response.usage?.total_tokens ?? 0;
-      console.error(`[snapshot]   LLM call: ${tokens} tokens`);
-    }
-    return content;
-  } catch (err) {
-    throw new Error(
-      `LLM call failed: ${err instanceof Error ? err.message : String(err)}`
-    );
-  }
 }
 
 /**

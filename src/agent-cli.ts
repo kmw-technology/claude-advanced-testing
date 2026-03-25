@@ -23,6 +23,7 @@ function parseArgs(argv: string[]): {
   help?: boolean;
   snapshot?: boolean;
   personas?: number;
+  llmBackend?: "openai" | "claude-code";
 } {
   const result: ReturnType<typeof parseArgs> = {
     backend: "openai",
@@ -108,6 +109,15 @@ function parseArgs(argv: string[]): {
         result.personas = parseInt(next ?? "4", 10);
         i++;
         break;
+      case "--llm-backend":
+        if (next === "openai" || next === "claude-code") {
+          result.llmBackend = next;
+        } else {
+          console.error(`Invalid LLM backend: ${next}. Use "openai" or "claude-code".`);
+          process.exit(1);
+        }
+        i++;
+        break;
       case "--help":
       case "-h":
         result.help = true;
@@ -151,8 +161,12 @@ Options:
   --persona-goals <list>    Comma-separated persona goals
   --snapshot                App Snapshot mode: explore once, then LLM-generate
                               tailored personas that evaluate the app (no extra
-                              browser sessions). Requires OPENAI_API_KEY.
+                              browser sessions).
   --personas <n>            Number of personas for snapshot mode (default: 4)
+  --llm-backend <backend>   LLM backend for snapshot evaluation phases:
+                              "openai" (default) or "claude-code".
+                              Exploration always uses --backend; this controls
+                              persona generation, evaluation, and aggregation.
   --help, -h                Show this help
 
 Examples:
@@ -171,8 +185,11 @@ Examples:
   node dist/agent-cli.js -b claude-code --preset market-ready \\
     -t "Evaluate if this app is ready for customers" -u https://app.example.com
 
-  # App Snapshot: explore once, generate tailored personas, aggregate findings
+  # App Snapshot with OpenAI for everything
   node dist/agent-cli.js --snapshot -u https://app.example.com --personas 4 -v
+
+  # App Snapshot: explore with OpenAI, evaluate with Claude Code
+  node dist/agent-cli.js --snapshot -u https://app.example.com --llm-backend claude-code -v
 
   # Persona test
   node dist/agent-cli.js -b claude-code --preset deep \\
@@ -181,8 +198,8 @@ Examples:
     --persona-goals "create account,understand pricing"
 
 Environment:
-  OPENAI_API_KEY            Required for --backend openai
-  claude CLI                Must be installed and authenticated for --backend claude-code
+  OPENAI_API_KEY            Required for --backend openai or --llm-backend openai
+  claude CLI                Must be installed for --backend claude-code or --llm-backend claude-code
 `);
 }
 
@@ -201,13 +218,15 @@ async function main(): Promise<void> {
       process.exit(1);
     }
 
-    console.error(`\nApp Snapshot starting (${args.personas ?? 4} personas)...\n`);
+    const llm = args.llmBackend ?? "openai";
+    console.error(`\nApp Snapshot starting (${args.personas ?? 4} personas, LLM: ${llm})...\n`);
 
     try {
       const result = await runAppSnapshot({
         url: args.url,
         personaCount: args.personas,
         language: args.language,
+        llmBackend: llm,
         agentConfig: {
           backend: "openai",
           openaiModel: args.model,
