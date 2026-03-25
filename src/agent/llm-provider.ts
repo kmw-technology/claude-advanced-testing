@@ -127,35 +127,11 @@ class ClaudeCodeLLMProvider implements LLMProvider {
         }
       });
 
-      const timer = setTimeout(() => {
-        if (settled) return;
-        settled = true;
-        child.kill("SIGTERM");
-        setTimeout(() => {
-          if (!child.killed) child.kill("SIGKILL");
-        }, 5000);
-        reject(
-          new Error(
-            `Claude Code LLM call timed out after ${this.timeout / 1000}s`
-          )
-        );
-      }, this.timeout);
-
-      child.on("error", (err) => {
+      const onClose = (code: number | null) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        reject(
-          new Error(
-            `Failed to spawn Claude Code: ${err.message}. Is the 'claude' CLI installed?`
-          )
-        );
-      });
-
-      child.on("close", (code) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
+        child.removeListener("error", onError);
 
         if (code !== 0) {
           reject(
@@ -184,7 +160,38 @@ class ClaudeCodeLLMProvider implements LLMProvider {
         }
 
         resolve(resultText);
-      });
+      };
+
+      const onError = (err: Error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        child.removeListener("close", onClose);
+        reject(
+          new Error(
+            `Failed to spawn Claude Code: ${err.message}. Is the 'claude' CLI installed?`
+          )
+        );
+      };
+
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        child.removeListener("close", onClose);
+        child.removeListener("error", onError);
+        child.kill("SIGTERM");
+        setTimeout(() => {
+          if (!child.killed) child.kill("SIGKILL");
+        }, 5000);
+        reject(
+          new Error(
+            `Claude Code LLM call timed out after ${this.timeout / 1000}s`
+          )
+        );
+      }, this.timeout);
+
+      child.on("close", onClose);
+      child.on("error", onError);
     });
   }
 }

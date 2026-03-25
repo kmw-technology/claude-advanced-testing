@@ -83,10 +83,13 @@ export async function runAppSnapshot(
     console.error(`[snapshot] Exploration backend: ${explorationBackend}\n`);
   }
 
-  const explorationResult = await runAgent(explorationTask, explorationConfig);
-
-  // Clean up env var
-  delete process.env.SNAPSHOT_SCREENSHOT_DIR;
+  let explorationResult;
+  try {
+    explorationResult = await runAgent(explorationTask, explorationConfig);
+  } finally {
+    // Always clean up env var, even if exploration fails
+    delete process.env.SNAPSHOT_SCREENSHOT_DIR;
+  }
 
   const snapshot = collector.finalize(explorationResult.finalAnswer);
 
