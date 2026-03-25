@@ -9,6 +9,10 @@ export interface SpeechResult {
   voice: string;
 }
 
+// Prefix that Edge TTS renders as ~1s of silence.
+// Compensates for MP3 encoder delay that decodeAudioData doesn't skip.
+const SILENCE_PREFIX = ". . . ";
+
 /**
  * Estimates MP3 audio duration from file size and bitrate.
  * For Edge TTS with 48kbps mono MP3: duration ≈ fileSize / (48000/8)
@@ -20,6 +24,9 @@ function estimateMp3DurationMs(buffer: Buffer, bitrate: number = 48000): number 
 /**
  * Generates real speech audio from text using Microsoft Edge TTS.
  * Free, no API key required. Supports 400+ voices in 100+ languages.
+ *
+ * Prepends a short silence prefix to the text so the MP3 encoder delay
+ * falls into the silence rather than clipping the speech content.
  *
  * Popular voices:
  *   German:  de-DE-KatjaNeural, de-DE-ConradNeural
@@ -47,7 +54,7 @@ export async function generateSpeech(
   );
 
   try {
-    await tts.ttsPromise(text, tempPath);
+    await tts.ttsPromise(SILENCE_PREFIX + text, tempPath);
     const buffer = readFileSync(tempPath);
     const durationMs = estimateMp3DurationMs(buffer);
     return { buffer, durationMs, voice };

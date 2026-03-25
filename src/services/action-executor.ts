@@ -216,10 +216,10 @@ export async function executeAction(
 
           const speech = await generateSpeech(config.ttsText, config.ttsVoice);
 
-          // Adapt recording duration to speech length + 1s buffer
+          // Adapt recording duration: 1.5s playback delay + speech length + 1s buffer
           adaptiveDuration = Math.max(
             config.recordDurationMs ?? 0,
-            speech.durationMs + 1000
+            speech.durationMs + 2500
           );
 
           // Cache the TTS audio for traceability
