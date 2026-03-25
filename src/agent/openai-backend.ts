@@ -21,7 +21,7 @@ export class OpenAIBackend {
       );
     }
     this.client = new OpenAI({ apiKey });
-    this.model = config.openaiModel ?? "gpt-4o";
+    this.model = config.openaiModel ?? "gpt-5-mini";
   }
 
   async runTask(task: AgentTask, config: AgentConfig): Promise<AgentResult> {

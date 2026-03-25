@@ -140,7 +140,7 @@ Presets:
 
 Options:
   --url, -u <url>           Target URL to test
-  --model, -m <model>       OpenAI model (default: gpt-4o)
+  --model, -m <model>       OpenAI model (default: gpt-5-mini)
   --lang <code>             Report language (e.g. "de", "en", "fr")
   --max-steps <n>           Max tool call iterations (default: 50)
   --timeout <ms>            Total timeout in ms (default: 300000)

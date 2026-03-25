@@ -5,7 +5,7 @@ export interface AgentConfig {
 
   // OpenAI-specific
   openaiApiKey?: string;
-  openaiModel?: string; // default: "gpt-4o"
+  openaiModel?: string; // default: "gpt-5-mini"
 
   // Claude Code-specific
   claudeCodePath?: string; // default: "claude"

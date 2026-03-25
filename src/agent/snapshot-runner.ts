@@ -37,7 +37,7 @@ export async function runAppSnapshot(
   const startTime = Date.now();
   const verbose = config.agentConfig.verbose ?? false;
   const personaCount = config.personaCount ?? 4;
-  const model = config.agentConfig.openaiModel ?? "gpt-4o";
+  const model = config.agentConfig.openaiModel ?? "gpt-5-mini";
 
   // Ensure we have an OpenAI API key
   const apiKey =
