@@ -18,7 +18,7 @@ export interface AgentConfig {
 
 // --- Task Presets ---
 
-export type TaskPreset = "quick" | "deep" | "security" | "accessibility" | "performance";
+export type TaskPreset = "quick" | "deep" | "security" | "accessibility" | "performance" | "market-ready";
 
 // --- Agent Task ---
 

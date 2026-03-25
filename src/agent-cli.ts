@@ -3,7 +3,7 @@
 import { runAgent, formatAgentResult } from "./agent/runner.js";
 import type { AgentConfig, AgentTask, TaskPreset } from "./agent/types.js";
 
-const VALID_PRESETS = ["quick", "deep", "security", "accessibility", "performance"];
+const VALID_PRESETS = ["quick", "deep", "security", "accessibility", "performance", "market-ready"];
 
 function parseArgs(argv: string[]): {
   backend: "openai" | "claude-code";
@@ -126,6 +126,7 @@ Presets:
                               security      — Security-focused (forms, auth, headers)
                               accessibility — WCAG compliance deep-dive
                               performance   — Core Web Vitals analysis
+                              market-ready  — Product-sense evaluation (customer experience, usability)
 
 Options:
   --url, -u <url>           Target URL to test
@@ -151,6 +152,10 @@ Examples:
   # Security check with OpenAI
   node dist/agent-cli.js -b openai --preset security \\
     -t "Check login form security" -u https://app.example.com
+
+  # Product-sense market readiness evaluation
+  node dist/agent-cli.js -b claude-code --preset market-ready \\
+    -t "Evaluate if this app is ready for customers" -u https://app.example.com
 
   # Persona test
   node dist/agent-cli.js -b claude-code --preset deep \\

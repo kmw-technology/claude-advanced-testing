@@ -64,7 +64,156 @@ Also check: heading hierarchy (only one H1), alt texts, color contrast, keyboard
 - Render-blocking resources
 Compare against thresholds: LCP < 2.5s (good), < 4s (needs improvement), > 4s (poor).`,
   },
+  "market-ready": {
+    focus: "Product-sense evaluation: would a real customer love this app?",
+    checks: ["screenshot", "forms", "responsive"],
+    maxPages: 20,
+    strategy: `You are a smart beta tester evaluating whether this app is ready for real customers. Technical metrics are secondary — your primary question is: "Would a real customer succeed with this app and enjoy using it?"
+
+Phase 1 — First Impression (30 seconds): Visit the landing page. What is the app? Who is it for? Is this immediately clear? Can you tell what to do next? Take a screenshot and note your gut reaction.
+
+Phase 2 — Feature Discovery: Use explore_app to map the full application. Categorize what you find: What features exist? What's missing that you'd expect? Are there dead ends, placeholder pages, or half-built features?
+
+Phase 3 — Customer Journeys: Identify the 2-3 most important things a customer would try to do. Start a session and attempt each journey end-to-end:
+  - Can you complete the task without confusion?
+  - Are error states handled gracefully?
+  - Does the app give clear feedback after actions?
+  - Would a non-technical user understand what's happening?
+  Use the ACT-CHECK pattern: verify that actions actually produce correct outcomes, not just confirmation messages.
+
+Phase 4 — Edge Cases & Polish: Try unexpected but realistic things a customer might do:
+  - Submit empty forms, use back button mid-flow, resize browser
+  - Look for broken images, lorem ipsum, placeholder text, inconsistent terminology
+  - Check if the app works on mobile viewport (responsive)
+
+Phase 5 — Competitive Lens: Based on what this app does, would a customer choose it over alternatives? What's the unique value? What would make someone switch away?
+
+Phase 6 — Report: Write your report from the perspective of a product advisor, not a QA engineer.`,
+  },
 };
+
+// --- Report Style ---
+
+type ReportStyle = "technical" | "product" | "hybrid";
+
+function getReportStyle(preset?: TaskPreset): ReportStyle {
+  if (!preset) return "hybrid";
+  switch (preset) {
+    case "market-ready":
+      return "product";
+    case "security":
+    case "accessibility":
+    case "performance":
+      return "technical";
+    case "quick":
+    case "deep":
+      return "hybrid";
+  }
+}
+
+function buildReportSection(style: ReportStyle, lang: string): string {
+  const langNote = lang !== "en" ? ` (write in ${lang})` : "";
+
+  if (style === "product") {
+    return `## Report Format${langNote}
+
+Your final message must be the test report. Write it as a product advisor, not a QA engineer. Structure it as:
+
+### 1. Executive Summary
+2-3 sentences: what this app does, who it's for, and your overall verdict — is it ready for customers?
+
+### 2. Product Scores
+Rate each dimension 1-10:
+- First Impression: [score] — Is the value proposition immediately clear? Does the landing page inspire confidence?
+- Feature Completeness: [score] — Does the app deliver on its promise? Are there gaps, dead ends, or half-built features?
+- Usability: [score] — Can a non-technical user accomplish their goals without frustration?
+- Customer Journey: [score] — Do the critical flows (signup, core feature, key actions) work end-to-end without friction?
+- Would-You-Recommend: [score] — Honestly, would you tell a friend to use this? Why or why not?
+
+### 3. Customer Journey Results
+For each journey you tested:
+**Journey: [Goal the customer is trying to accomplish]**
+Outcome: [Succeeded / Failed / Partially succeeded]
+Friction points: [What slowed them down or confused them]
+Delight moments: [What worked surprisingly well]
+
+### 4. Findings
+Group by impact on customer experience. For each finding:
+**[SEVERITY] [Title]**
+What: One sentence describing the issue from a customer's perspective.
+Where: URL or feature area.
+Impact: How this affects a real customer.
+Recommendation: What to do about it.
+
+### 5. What's Working Well
+List 3-5 things that customers would appreciate.
+
+### 6. Market Readiness Verdict
+- Ready to launch? [Yes / Not yet / With caveats]
+- Top 3 things to fix before launch (ordered by customer impact)
+- Top 3 things that would delight customers if added next`;
+  }
+
+  if (style === "technical") {
+    return `## Report Format${langNote}
+
+Your final message must be the test report. Structure it as:
+
+### 1. Executive Summary
+2-3 sentences: what was tested, overall verdict (pass/fail/mixed), most critical finding.
+
+### 2. Scores
+Rate each category 1-10:
+- Performance: [score] — [one-line reason]
+- Accessibility: [score] — [one-line reason]
+- SEO: [score] — [one-line reason]
+- Security: [score] — [one-line reason]
+- UX/Design: [score] — [one-line reason]
+
+### 3. Findings
+Group by severity. For each finding:
+**[SEVERITY] Category — Title**
+What: One sentence describing the issue.
+Where: URL or element.
+Fix: Concrete, actionable recommendation.
+
+### 4. Positive Aspects
+List 3-5 things done well.
+
+### 5. Priority Recommendations
+Top 3 actions to take, ordered by impact.`;
+  }
+
+  // hybrid
+  return `## Report Format${langNote}
+
+Your final message must be the test report. Structure it as:
+
+### 1. Executive Summary
+2-3 sentences: what was tested, overall verdict, most critical finding.
+
+### 2. Scores
+Rate each category 1-10:
+- Performance: [score] — [one-line reason]
+- Accessibility: [score] — [one-line reason]
+- Security: [score] — [one-line reason]
+- UX/Design: [score] — [one-line reason]
+- Customer Experience: [score] — Would a real user enjoy this app?
+
+### 3. Findings
+Group by severity. For each finding:
+**[SEVERITY] Category — Title**
+What: One sentence describing the issue.
+Where: URL or element.
+Impact: How this affects the user experience.
+Fix: Concrete, actionable recommendation.
+
+### 4. Positive Aspects
+List 3-5 things done well.
+
+### 5. Priority Recommendations
+Top 3 actions to take, ordered by impact.`;
+}
 
 // --- System Prompt (OpenAI Backend) ---
 
@@ -193,35 +342,9 @@ URL: ${task.url}`);
     );
   }
 
-  // Report format
+  // Report format (conditional on preset)
   const lang = task.language ?? "en";
-  sections.push(`## Report Format${lang !== "en" ? ` (write in ${lang})` : ""}
-
-Your final message must be the test report. Structure it as:
-
-### 1. Executive Summary
-2-3 sentences: what was tested, overall verdict (pass/fail/mixed), most critical finding.
-
-### 2. Scores
-Rate each category 1-10:
-- Performance: [score] — [one-line reason]
-- Accessibility: [score] — [one-line reason]
-- SEO: [score] — [one-line reason]
-- Security: [score] — [one-line reason]
-- UX/Design: [score] — [one-line reason]
-
-### 3. Findings
-Group by severity. For each finding:
-**[SEVERITY] Category — Title**
-What: One sentence describing the issue.
-Where: URL or element.
-Fix: Concrete, actionable recommendation.
-
-### 4. Positive Aspects
-List 3-5 things done well.
-
-### 5. Priority Recommendations
-Top 3 actions to take, ordered by impact.`);
+  sections.push(buildReportSection(getReportStyle(task.preset), lang));
 
   return sections.join("\n\n");
 }
@@ -242,7 +365,34 @@ export function buildClaudeCodePrompt(task: AgentTask): string {
 - **persona_test** — Persona-based testing with structured feedback collection.`);
 
   // Methodology (compact for Claude Code since it's already smart)
-  sections.push(`## Rules
+  const isProductPreset = task.preset === "market-ready";
+
+  if (isProductPreset) {
+    sections.push(`## Rules
+- Think like a product advisor, not a QA engineer. Your job is to evaluate whether real customers would love this app.
+- Start by exploring the app to understand what it does and who it's for before diving into details.
+- Focus on customer journeys: can a user accomplish the things they came here to do?
+- Try interactive flows end-to-end via session + interact. Don't just read pages — use the app.
+- Note both what's broken AND what's missing. A feature that works but is confusing is still a problem.
+- Never duplicate tool calls.
+- Always end sessions when done.
+
+### Verify, Don't Trust
+After any action that should change state or produce a result:
+1. Find independent evidence — navigate elsewhere in the app to confirm the outcome is real, not just a confirmation message.
+2. If the app claims a count, status, or result — navigate to the source and check.
+3. Red flags: success messages without observable change, placeholder content, dead-end flows.
+
+### Voice Testing
+For apps with mic/voice input: start sessions with fakeMedia=true, detect the app's language, use send_audio with a matching ttsVoice, and verify the app processed the voice command correctly.`);
+
+    sections.push(`## Severity (from customer perspective)
+- CRITICAL: Customer cannot accomplish their goal, gives up, or loses trust
+- MAJOR: Significant confusion, friction, or a feature that doesn't deliver on its promise
+- MINOR: Polish issues, small UX annoyances, missing but non-essential features
+- POSITIVE: Things that would genuinely delight a customer`);
+  } else {
+    sections.push(`## Rules
 - Always start with test_website for automated checks before manual exploration.
 - Never duplicate tool calls — if you already tested accessibility, don't test it again.
 - For sites with login: try to find demo credentials or test with empty/invalid data.
@@ -260,12 +410,12 @@ After any action that should change state or produce a result:
 ### Voice Testing
 For apps with mic/voice input: start sessions with fakeMedia=true, detect the app's language, use send_audio with a matching ttsVoice, and verify the app processed the voice command correctly.`);
 
-  // Severity
-  sections.push(`## Severity
+    sections.push(`## Severity
 - CRITICAL: Blocks functionality, security risk, data loss
 - MAJOR: Broken feature, accessibility barrier, standards violation
 - MINOR: Polish, UX friction, missing metadata
 - POSITIVE: Good practices worth noting`);
+  }
 
   // Task
   sections.push(`## Your Task
@@ -296,15 +446,9 @@ Strategy: ${preset.strategy}`);
     );
   }
 
-  // Report format
+  // Report format (conditional on preset)
   const lang = task.language ?? "en";
-  sections.push(`## Report${lang !== "en" ? ` (write in ${lang})` : ""}
-End with a structured report:
-1. **Executive Summary** — 2-3 sentences, overall verdict
-2. **Scores** — Performance, Accessibility, SEO, Security, UX (1-10 each)
-3. **Findings** — Grouped by severity (CRITICAL > MAJOR > MINOR), each with: what, where, fix
-4. **Positive Aspects** — 3-5 good things
-5. **Top 3 Recommendations** — Ordered by impact`);
+  sections.push(buildReportSection(getReportStyle(task.preset), lang));
 
   return sections.join("\n\n");
 }
