@@ -152,7 +152,7 @@ export function formatInteractResult(result: InteractResult): string {
   const elements = result.pageState.interactiveElements;
   if (elements.length > 0) {
     text += `\nInteractive Elements (${elements.length}):\n`;
-    for (const el of elements.slice(0, 30)) {
+    for (const el of elements.slice(0, 20)) {
       const parts = [`  [${el.tag}]`];
       if (el.role) parts.push(`role="${el.role}"`);
       if (el.text) parts.push(`"${el.text}"`);
@@ -162,8 +162,8 @@ export function formatInteractResult(result: InteractResult): string {
       if (el.disabled) parts.push("[DISABLED]");
       text += parts.join(" ") + "\n";
     }
-    if (elements.length > 30) {
-      text += `  ... and ${elements.length - 30} more\n`;
+    if (elements.length > 20) {
+      text += `  ... and ${elements.length - 20} more\n`;
     }
   }
 

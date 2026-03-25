@@ -132,6 +132,15 @@ After any action that should change the app's state or produce a result, find **
 - UI/styling/layout checks
 - Navigation that just loads a new page without changing state`);
 
+  // Voice & Audio Testing
+  sections.push(`## Voice & Audio Testing
+If the app has microphone or voice input features:
+- Start sessions with fakeMedia=true to enable audio injection.
+- Detect the app's language from its content and choose a matching TTS voice (e.g., de-DE-KatjaNeural for German, en-US-AriaNeural for English, fr-FR-DeniseNeural for French).
+- Use send_audio with ttsText to generate real speech. The recording duration auto-adapts to speech length.
+- After voice input is transcribed, verify the transcription is reasonable and submit it.
+- Apply ACT-CHECK: verify the app correctly processed the voice command by checking the actual outcome.`);
+
   // Preset strategy
   const preset = task.preset ? PRESET_CONFIGS[task.preset] : null;
   if (preset) {
@@ -246,7 +255,10 @@ After any action that should change state or produce a result:
 1. Find independent evidence — navigate elsewhere in the app to confirm the outcome is real, not just a confirmation message.
 2. If the app claims a count, status, or result — navigate to the source and check.
 3. If an AI/assistant references prior context — verify it matches what actually occurred.
-4. Red flags: references to non-existent data, scoped responses to unstated context, success messages without observable change.`);
+4. Red flags: references to non-existent data, scoped responses to unstated context, success messages without observable change.
+
+### Voice Testing
+For apps with mic/voice input: start sessions with fakeMedia=true, detect the app's language, use send_audio with a matching ttsVoice, and verify the app processed the voice command correctly.`);
 
   // Severity
   sections.push(`## Severity

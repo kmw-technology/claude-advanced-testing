@@ -174,8 +174,8 @@ export class OpenAIBackend {
     const limits: Record<string, number> = {
       test_website: 6000, // high value — audit results
       explore_app: 4000, // moderate — page list
-      read_page: 3000, // moderate — page content
-      interact: 2000, // low — mostly confirms action
+      read_page: 4000, // high — page content needed for verification
+      interact: 3000, // high — form state, notifications, elements needed for verification
       session: 500, // very low — session ID
       run_test: 4000, // high — test results
       persona_test: 4000, // high — persona report
