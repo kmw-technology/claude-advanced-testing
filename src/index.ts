@@ -2,6 +2,8 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { writeFileSync, mkdirSync } from "fs";
+import { join } from "path";
 import { closeBrowser } from "./services/browser-manager.js";
 import { endAllSessions } from "./services/session-manager.js";
 import {
@@ -33,6 +35,33 @@ import {
   handlePersonaTest,
 } from "./tools/persona-test.js";
 
+// --- Screenshot persistence (backend-agnostic) ---
+// When SNAPSHOT_SCREENSHOT_DIR is set, save all tool screenshots to disk.
+// This works regardless of which agent backend (OpenAI, Claude Code) calls the tools.
+const snapshotScreenshotDir = process.env.SNAPSHOT_SCREENSHOT_DIR;
+let screenshotCounter = 0;
+
+if (snapshotScreenshotDir) {
+  mkdirSync(snapshotScreenshotDir, { recursive: true });
+}
+
+type McpContent = Array<
+  | { type: "text"; text: string }
+  | { type: "image"; data: string; mimeType: string }
+>;
+
+function persistScreenshots(toolName: string, content: McpContent): void {
+  if (!snapshotScreenshotDir) return;
+  for (const item of content) {
+    if (item.type === "image" && "data" in item) {
+      screenshotCounter++;
+      const filename = `${String(screenshotCounter).padStart(3, "0")}-${toolName}.png`;
+      const fullPath = join(snapshotScreenshotDir, filename);
+      writeFileSync(fullPath, Buffer.from(item.data, "base64"));
+    }
+  }
+}
+
 const server = new McpServer({
   name: "claude-advanced-testing",
   version: "2.0.0",
@@ -59,6 +88,7 @@ server.tool(
         });
       }
 
+      persistScreenshots("test_website", content);
       return { content };
     } catch (err) {
       return {
@@ -100,16 +130,16 @@ server.tool(
       }
 
       if (result.pageState?.screenshot) {
-        return {
-          content: [
-            { type: "text" as const, text },
-            {
-              type: "image" as const,
-              data: result.pageState.screenshot,
-              mimeType: "image/png",
-            },
-          ],
-        };
+        const content: McpContent = [
+          { type: "text" as const, text },
+          {
+            type: "image" as const,
+            data: result.pageState.screenshot,
+            mimeType: "image/png",
+          },
+        ];
+        persistScreenshots("session", content);
+        return { content };
       }
 
       return { content: [{ type: "text" as const, text }] };
@@ -138,17 +168,16 @@ server.tool(
       const text = formatInteractResult(result);
 
       if (result.pageState.screenshot) {
-        return {
-          content: [
-            { type: "text" as const, text },
-            {
-              type: "image" as const,
-              data: result.pageState.screenshot,
-              mimeType: "image/png",
-            },
-          ],
-          isError: !result.success ? true : undefined,
-        };
+        const content: McpContent = [
+          { type: "text" as const, text },
+          {
+            type: "image" as const,
+            data: result.pageState.screenshot,
+            mimeType: "image/png",
+          },
+        ];
+        persistScreenshots("interact", content);
+        return { content, isError: !result.success ? true : undefined };
       }
 
       return {
@@ -180,16 +209,16 @@ server.tool(
       const text = formatReadPageResult(result);
 
       if (result.pageState.screenshot) {
-        return {
-          content: [
-            { type: "text" as const, text },
-            {
-              type: "image" as const,
-              data: result.pageState.screenshot,
-              mimeType: "image/png",
-            },
-          ],
-        };
+        const content: McpContent = [
+          { type: "text" as const, text },
+          {
+            type: "image" as const,
+            data: result.pageState.screenshot,
+            mimeType: "image/png",
+          },
+        ];
+        persistScreenshots("read_page", content);
+        return { content };
       }
 
       return { content: [{ type: "text" as const, text }] };
@@ -272,16 +301,16 @@ server.tool(
       const result = await handlePersonaTest(input);
 
       if (result.screenshot) {
-        return {
-          content: [
-            { type: "text" as const, text: result.text },
-            {
-              type: "image" as const,
-              data: result.screenshot,
-              mimeType: "image/png",
-            },
-          ],
-        };
+        const content: McpContent = [
+          { type: "text" as const, text: result.text },
+          {
+            type: "image" as const,
+            data: result.screenshot,
+            mimeType: "image/png",
+          },
+        ];
+        persistScreenshots("persona_test", content);
+        return { content };
       }
 
       return { content: [{ type: "text" as const, text: result.text }] };

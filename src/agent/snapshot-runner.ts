@@ -59,6 +59,11 @@ export async function runAppSnapshot(
 
   const collector = new SnapshotCollector(config.url);
 
+  // Tell the MCP server to save screenshots to our snapshot directory.
+  // This works for ALL backends (OpenAI, Claude Code) since the MCP server
+  // inherits this env var and persists screenshots at the tool level.
+  process.env.SNAPSHOT_SCREENSHOT_DIR = join(collector.getSnapshotDir(), "screenshots");
+
   const explorationTask: AgentTask = {
     instruction: `Thoroughly explore this app and evaluate it from a product perspective. Discover all pages, try key features, test forms, and document everything you find. Take screenshots of important pages.`,
     url: config.url,
@@ -79,6 +84,10 @@ export async function runAppSnapshot(
   }
 
   const explorationResult = await runAgent(explorationTask, explorationConfig);
+
+  // Clean up env var
+  delete process.env.SNAPSHOT_SCREENSHOT_DIR;
+
   const snapshot = collector.finalize(explorationResult.finalAnswer);
 
   if (verbose) {
