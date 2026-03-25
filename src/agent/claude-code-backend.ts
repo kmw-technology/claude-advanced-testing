@@ -51,6 +51,16 @@ export class ClaudeCodeBackend {
     //    --allowedTools: grant MCP tool permissions so Claude Code doesn't prompt
     //    --permission-mode default: no extra permissions beyond allowedTools
     //    --no-session-persistence: don't save this agent run to session history
+    const allowedTools = [
+      "mcp__testing__test_website",
+      "mcp__testing__session",
+      "mcp__testing__interact",
+      "mcp__testing__read_page",
+      "mcp__testing__explore_app",
+      "mcp__testing__run_test",
+      "mcp__testing__persona_test",
+    ];
+
     const child = spawn(this.claudePath, [
       "--mcp-config",
       configPath,
@@ -59,13 +69,7 @@ export class ClaudeCodeBackend {
       "--output-format",
       "json",
       "--allowedTools",
-      "mcp__testing__test_website",
-      "mcp__testing__session",
-      "mcp__testing__interact",
-      "mcp__testing__read_page",
-      "mcp__testing__explore_app",
-      "mcp__testing__run_test",
-      "mcp__testing__persona_test",
+      allowedTools.join(","),
       "--no-session-persistence",
     ], {
       stdio: ["ignore", "pipe", "pipe"],
