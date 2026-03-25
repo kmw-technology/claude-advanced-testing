@@ -41,12 +41,22 @@ export function generateToneWav(
 /**
  * Builds a JavaScript snippet that overrides navigator.mediaDevices.getUserMedia
  * to return a MediaStream sourced from decoded audio data.
- * Uses window.__fakeAudioBase64 so audio can be updated dynamically.
+ *
+ * Idempotent: re-running only updates the audio data, doesn't re-install the override.
+ *
+ * Key fixes vs. original:
+ * - Resumes suspended AudioContext (headless Chrome starts suspended)
+ * - Idempotency guard prevents chained overrides
  */
 function buildMediaOverrideScript(audioBase64: string): string {
   return `
     (function() {
       window.__fakeAudioBase64 = "${audioBase64}";
+
+      // Idempotent: don't re-install the override, just update the audio data
+      if (window.__fakeMediaOverrideInstalled) return;
+      window.__fakeMediaOverrideInstalled = true;
+
       const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
 
       navigator.mediaDevices.getUserMedia = async function(constraints) {
@@ -57,6 +67,11 @@ function buildMediaOverrideScript(audioBase64: string): string {
 
         try {
           const base64 = window.__fakeAudioBase64;
+          if (!base64) {
+            console.warn('[fake-media] No audio data set, falling back to real getUserMedia');
+            return originalGetUserMedia(constraints);
+          }
+
           // Decode base64 to ArrayBuffer
           const binaryString = atob(base64);
           const bytes = new Uint8Array(binaryString.length);
@@ -64,8 +79,12 @@ function buildMediaOverrideScript(audioBase64: string): string {
             bytes[i] = binaryString.charCodeAt(i);
           }
 
-          // Create AudioContext and decode the audio data (WAV or MP3)
+          // Create AudioContext and ensure it's running
           const audioContext = new AudioContext();
+          if (audioContext.state === 'suspended') {
+            await audioContext.resume();
+          }
+
           const audioBuffer = await audioContext.decodeAudioData(bytes.buffer.slice(0));
 
           // Create a MediaStream from the audio buffer
@@ -76,6 +95,7 @@ function buildMediaOverrideScript(audioBase64: string): string {
           source.connect(destination);
           source.start();
 
+          console.log('[fake-media] Audio injected (' + audioBuffer.duration.toFixed(1) + 's)');
           return destination.stream;
         } catch (e) {
           console.warn('[fake-media] Override failed, falling back to real getUserMedia:', e);
@@ -88,8 +108,8 @@ function buildMediaOverrideScript(audioBase64: string): string {
 
 /**
  * Injects a fake getUserMedia override into a page.
- * The override returns a MediaStream sourced from the provided audio data.
  * Uses addInitScript so it persists across navigations.
+ * Call this at session creation time.
  */
 export async function injectFakeMediaOverride(
   page: Page,
@@ -101,14 +121,18 @@ export async function injectFakeMediaOverride(
 }
 
 /**
- * Updates the fake audio source on a page that already has the override injected.
- * Call this before each send_audio to change what the microphone "hears".
+ * Ensures the fake media override is installed and the audio data is set.
+ * Works whether or not the session was started with fakeMedia: true.
+ *
+ * - If override already installed (via addInitScript or prior call): just updates audio data
+ * - If override not installed: installs it via page.evaluate (one-time, won't survive navigation)
+ *
+ * Call this in send_audio before clicking the mic button.
  */
-export async function updateFakeAudio(
+export async function ensureFakeAudioOverride(
   page: Page,
   audioBase64: string
 ): Promise<void> {
-  await page.evaluate((b64) => {
-    (window as any).__fakeAudioBase64 = b64;
-  }, audioBase64);
+  const script = buildMediaOverrideScript(audioBase64);
+  await page.evaluate(script);
 }

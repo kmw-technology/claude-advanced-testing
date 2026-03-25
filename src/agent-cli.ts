@@ -133,10 +133,14 @@ function printHelp(): void {
 claude-advanced-testing Agent CLI v2.0
 
 Usage:
-  node dist/agent-cli.js --backend <backend> --task <task> [options]
+  node dist/agent-cli.js --url <url> [options]           Full Audit (default)
+  node dist/agent-cli.js --task <task> [options]          Custom task
 
-Required:
-  --task, -t <text>         The testing task to perform
+Required (one of):
+  --url, -u <url>           Target URL — runs Full Audit by default
+  --task, -t <text>         Custom testing task (skips Full Audit)
+
+General:
   --backend, -b <backend>   "openai" or "claude-code" (default: openai)
 
 Presets:
@@ -149,7 +153,6 @@ Presets:
                               market-ready  — Product-sense evaluation (customer experience, usability)
 
 Options:
-  --url, -u <url>           Target URL to test
   --model, -m <model>       OpenAI model (default: gpt-5-mini)
   --lang <code>             Report language (e.g. "de", "en", "fr")
   --max-steps <n>           Max tool call iterations (default: 50)
@@ -159,41 +162,35 @@ Options:
   --persona-name <name>     Persona name for persona-based testing
   --persona-role <role>     Persona role (e.g. "first-time visitor")
   --persona-goals <list>    Comma-separated persona goals
-  --snapshot                App Snapshot mode: explore once, then LLM-generate
-                              tailored personas that evaluate the app (no extra
-                              browser sessions).
-  --personas <n>            Number of personas for snapshot mode (default: 4)
-  --llm-backend <backend>   LLM backend for snapshot evaluation phases:
+  --snapshot                Explicitly force Full Audit mode (default when only --url is given)
+  --personas <n>            Number of personas for Full Audit (default: 4)
+  --llm-backend <backend>   LLM backend for evaluation phases:
                               "openai" (default) or "claude-code".
                               Exploration always uses --backend; this controls
                               persona generation, evaluation, and aggregation.
   --help, -h                Show this help
 
 Examples:
-  # Quick accessibility check
-  node dist/agent-cli.js -b claude-code --preset quick -t "Test https://example.com" -u https://example.com
+  # Full Audit (default) — just provide a URL
+  node dist/agent-cli.js -u https://example.com
 
-  # Deep audit in German
-  node dist/agent-cli.js -b claude-code --preset deep --lang de \\
-    -t "Vollständiger Audit von https://example.com" -u https://example.com
+  # Full Audit with 6 personas, verbose output
+  node dist/agent-cli.js -u https://example.com --personas 6 -v
 
-  # Security check with OpenAI
-  node dist/agent-cli.js -b openai --preset security \\
-    -t "Check login form security" -u https://app.example.com
+  # Full Audit in German, explore with OpenAI, evaluate with Claude Code
+  node dist/agent-cli.js -u https://example.com --lang de --llm-backend claude-code
 
-  # Product-sense market readiness evaluation
-  node dist/agent-cli.js -b claude-code --preset market-ready \\
-    -t "Evaluate if this app is ready for customers" -u https://app.example.com
+  # Quick preset (skip Full Audit)
+  node dist/agent-cli.js --preset quick -t "Quick scan" -u https://example.com
 
-  # App Snapshot with OpenAI for everything
-  node dist/agent-cli.js --snapshot -u https://app.example.com --personas 4 -v
+  # Deep multi-page audit preset
+  node dist/agent-cli.js -b claude-code --preset deep -t "Deep audit" -u https://example.com
 
-  # App Snapshot: explore with OpenAI, evaluate with Claude Code
-  node dist/agent-cli.js --snapshot -u https://app.example.com --llm-backend claude-code -v
+  # Security check
+  node dist/agent-cli.js --preset security -t "Check login form security" -u https://app.example.com
 
-  # Persona test
-  node dist/agent-cli.js -b claude-code --preset deep \\
-    -t "Test the signup flow" -u https://app.example.com \\
+  # Custom task
+  node dist/agent-cli.js -b claude-code -t "Test the signup flow" -u https://app.example.com \\
     --persona-name "Maria" --persona-role "elderly first-time user" \\
     --persona-goals "create account,understand pricing"
 
@@ -211,16 +208,20 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  // Snapshot mode
-  if (args.snapshot) {
+  // Full Audit (snapshot) mode:
+  // - Explicit --snapshot flag, OR
+  // - URL provided without --preset and without --task (default mode)
+  const isFullAudit = args.snapshot || (args.url && !args.preset && !args.task);
+
+  if (isFullAudit) {
     if (!args.url) {
-      console.error("Error: --url is required for --snapshot mode. Use --help for usage.");
+      console.error("Error: --url is required for full audit mode. Use --help for usage.");
       process.exit(1);
     }
 
     const explore = args.backend;
-    const llm = args.llmBackend ?? args.backend; // default LLM backend = exploration backend
-    console.error(`\nApp Snapshot starting (${args.personas ?? 4} personas, explore: ${explore}, LLM: ${llm})...\n`);
+    const llm = args.llmBackend ?? args.backend;
+    console.error(`\nFull Audit starting (${args.personas ?? 4} personas, explore: ${explore}, LLM: ${llm})...\n`);
 
     try {
       const result = await runAppSnapshot({
@@ -245,7 +246,7 @@ async function main(): Promise<void> {
   }
 
   if (!args.task) {
-    console.error("Error: --task is required. Use --help for usage.");
+    console.error("Error: --task is required (or use --url for a full audit). Use --help for usage.");
     process.exit(1);
   }
 
@@ -275,7 +276,6 @@ async function main(): Promise<void> {
     };
   }
 
-  // Summary
   console.error(`\nAgent starting (backend: ${config.backend}${task.preset ? `, preset: ${task.preset}` : ""})...\n`);
 
   try {

@@ -212,7 +212,7 @@ export async function executeAction(
         let adaptiveDuration = config.recordDurationMs ?? 3000;
         if (config.ttsText) {
           const { generateSpeech } = await import("./tts-service.js");
-          const { updateFakeAudio } = await import("./fake-media.js");
+          const { ensureFakeAudioOverride } = await import("./fake-media.js");
 
           const speech = await generateSpeech(config.ttsText, config.ttsVoice);
 
@@ -246,8 +246,8 @@ export async function executeAction(
             // Caching is best-effort
           }
 
-          // Update the fake microphone source with TTS audio
-          await updateFakeAudio(page, speech.buffer.toString("base64"));
+          // Install override (if needed) and set the TTS audio as mic source
+          await ensureFakeAudioOverride(page, speech.buffer.toString("base64"));
         }
 
         // 1. Click the mic/record button to start recording

@@ -70,7 +70,10 @@ export function resolveLocator(page: Page, strategy: LocatorStrategy): Locator {
     let combined: Locator | null = null;
 
     for (const alt of alternatives) {
+      // getByLabel only matches form elements (<input>, <textarea>, <select>),
+      // not <button> elements with aria-label — so we also try getByRole as fallback
       const byLabel = page.getByLabel(alt);
+      const byAriaLabel = page.getByRole("button", { name: alt });
       const escaped = alt.replace(/'/g, "\\'");
       const byProximity = page
         .locator(
@@ -78,7 +81,7 @@ export function resolveLocator(page: Page, strategy: LocatorStrategy): Locator {
         )
         .locator("input, textarea, select")
         .first();
-      const locator = byLabel.or(byProximity);
+      const locator = byLabel.or(byAriaLabel).or(byProximity);
       combined = combined ? combined.or(locator) : locator;
     }
 
