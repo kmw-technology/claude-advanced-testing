@@ -4,9 +4,9 @@
 ╔═══════════════════════════════════════════════════════════════════════════════╗
 ║  AKTUELLER STATUS (Letzte Aktualisierung: 2026-03-24)                        ║
 ╠═══════════════════════════════════════════════════════════════════════════════╣
-║  Phase:      Foundation                                                      ║
+║  Phase:      v2.0 — Agent System                                             ║
 ║  Repository: https://github.com/jonaslfranz/claude-advanced-testing          ║
-║  Nächstes:   Tool-Erweiterungen, Tests, npm Publish                          ║
+║  Nächstes:   Tests, npm Publish, weitere Backends                            ║
 ╠═══════════════════════════════════════════════════════════════════════════════╣
 ║  KRITISCH: Keine Production-Änderungen ohne Backup + Genehmigung!            ║
 ║  PFLICHT:  Lies MEMORY.md für vollständigen Kontext                          ║
@@ -18,19 +18,22 @@
 
 ## PROJEKT-ÜBERSICHT
 
-**claude-advanced-testing** ist ein MCP-Server (Model Context Protocol), der Claude mit
-fortschrittlichen Web-Testing- und Analyse-Tools ausstattet, angetrieben durch Playwright.
+**claude-advanced-testing** ist ein MCP-Server (Model Context Protocol) mit integriertem
+Agent-System, der autonomes Web-Testing mit Playwright ermöglicht.
 
-### Tools:
-- `screenshot` — Screenshots mit Viewport/Device-Emulation
-- `accessibility_audit` — WCAG Accessibility-Checks
-- `performance_audit` — Performance-Metriken (Load Time, LCP, Network)
-- `check_links` — Broken Links erkennen
-- `responsive_test` — Responsive Screenshots (Mobile/Tablet/Desktop/Wide)
-- `scrape_page` — Seiteninhalte extrahieren (JS-gerendert)
-- `seo_analysis` — SEO-Analyse (Meta, OG, Structured Data)
-- `analyze_forms` — Formular-Analyse
-- `run_playwright_test` — Playwright Tests ausführen
+### MCP Tools (7):
+- `test_website` — Kombinierter Check: Screenshot, Accessibility, Performance, Links, Responsive, SEO, Forms. Site-Audit via `maxPages > 1`
+- `session` — Browser-Sessions starten/beenden (action: start/end)
+- `interact` — Klicken, Ausfüllen, Navigieren in einer Session
+- `read_page` — Seiteninhalte lesen (Session oder One-Off URL)
+- `explore_app` — App crawlen, Sitemap erstellen, Page-Klassifikation
+- `run_test` — Playwright Tests ausführen
+- `persona_test` — Persona-basiertes Testing mit Feedback-Sammlung
+
+### Agent-System:
+Autonomes Testing mit zwei austauschbaren Backends:
+- **OpenAI API** — Wir kontrollieren den Agentic Loop (tool_calls → execute → loop)
+- **Claude Code CLI** — Selbstlaufende Instanz, verbindet sich via MCP
 
 ---
 
@@ -43,6 +46,8 @@ fortschrittlichen Web-Testing- und Analyse-Tools ausstattet, angetrieben durch P
 | MCP SDK | @modelcontextprotocol/sdk |
 | Browser | Playwright (Chromium) |
 | Validation | Zod |
+| LLM | OpenAI SDK (^6.x) |
+| Schema | zod-to-json-schema |
 | CI/CD | GitHub Actions |
 
 ---
@@ -52,10 +57,12 @@ fortschrittlichen Web-Testing- und Analyse-Tools ausstattet, angetrieben durch P
 ```
 claude-advanced-testing/
 ├── src/
-│   ├── tools/           # Tool-Implementierungen
-│   ├── services/        # Shared Services (Browser Manager)
+│   ├── agent/           # Agent-System (OpenAI + Claude Code Backends)
+│   ├── tools/           # Tool-Implementierungen (7 MCP Tools)
+│   ├── services/        # Shared Services (Browser, Sessions, SPA-Wait, i18n)
 │   ├── models/          # TypeScript Types
-│   └── index.ts         # MCP Server Entry Point
+│   ├── index.ts         # MCP Server Entry Point
+│   └── agent-cli.ts     # Agent CLI Entry Point
 ├── tests/               # Tests
 ├── deployment/          # Deployment Configs
 ├── documentation/       # Dokumentation
@@ -79,8 +86,13 @@ npm run build
 # Development (watch mode)
 npm run dev
 
-# Server starten
+# MCP Server starten
 npm start
+
+# Agent (autonomes Testing)
+npm run agent -- --backend openai --task "Test https://example.com"
+npm run agent -- --backend claude-code --task "Full audit of https://example.com"
+npm run agent -- --help
 
 # Tests
 npm test

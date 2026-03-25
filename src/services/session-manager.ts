@@ -3,6 +3,7 @@ import { createContext } from "./browser-manager.js";
 import type { SessionData, SessionInfo, ConsoleEntry } from "../models/types.js";
 import { clearFeedback } from "./feedback-collector.js";
 import { clearPersonaTest } from "./persona-manager.js";
+import { injectFakeMediaOverride } from "./fake-media.js";
 
 const sessions = new Map<string, SessionData>();
 let cleanupInterval: ReturnType<typeof setInterval> | null = null;
@@ -32,14 +33,34 @@ export async function createSession(options?: {
   width?: number;
   height?: number;
   deviceName?: string;
+  fakeMedia?: boolean;
+  fakeAudioBase64?: string;
 }): Promise<SessionData> {
+  // Extract origin from URL for permission scoping
+  let origin: string | undefined;
+  if (options?.url) {
+    try {
+      const parsed = new URL(options.url);
+      origin = parsed.origin;
+    } catch {
+      // Invalid URL, skip origin
+    }
+  }
+
   const context = await createContext({
     width: options?.width,
     height: options?.height,
     deviceName: options?.deviceName,
+    permissions: options?.fakeMedia ? ["microphone", "camera"] : undefined,
+    origin,
   });
 
   const page = await context.newPage();
+
+  // Inject fake media override before any navigation
+  if (options?.fakeMedia) {
+    await injectFakeMediaOverride(page, options.fakeAudioBase64);
+  }
 
   const id = crypto.randomUUID();
   const now = Date.now();
@@ -56,6 +77,8 @@ export async function createSession(options?: {
     deviceName: options?.deviceName,
     width: options?.width ?? 1280,
     height: options?.height ?? 720,
+    fakeMedia: options?.fakeMedia,
+    fakeAudioBase64: options?.fakeAudioBase64,
   };
 
   // Collect console errors

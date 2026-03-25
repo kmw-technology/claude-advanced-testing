@@ -151,6 +151,8 @@ export interface SessionData {
   deviceName?: string;
   width: number;
   height: number;
+  fakeMedia?: boolean;
+  fakeAudioBase64?: string;
 }
 
 export interface SessionInfo {
@@ -221,7 +223,8 @@ export type InteractionAction =
   | "go_back"
   | "go_forward"
   | "wait"
-  | "submit";
+  | "submit"
+  | "send_audio";
 
 export interface InteractResult {
   success: boolean;
@@ -230,6 +233,7 @@ export interface InteractResult {
   error?: string;
   dialogMessage?: string;
   duration: number;
+  audioCachePath?: string;
 }
 
 export interface DiscoveredPage {

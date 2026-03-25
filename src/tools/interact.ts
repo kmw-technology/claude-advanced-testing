@@ -26,6 +26,7 @@ export const interactSchema = z.object({
       "go_forward",
       "wait",
       "submit",
+      "send_audio",
     ])
     .describe("The interaction action to perform"),
   target: locatorStrategySchema
@@ -37,7 +38,7 @@ export const interactSchema = z.object({
     .string()
     .optional()
     .describe(
-      "Value for the action: text to type (fill), option to select, URL (navigate), key name (press_key), scroll direction (up/down/left/right), or ms/selector (wait)"
+      'Value for the action: text to type (fill), option to select, URL (navigate), key name (press_key), scroll direction (up/down/left/right), ms/selector (wait), or JSON config for send_audio: {"ttsText":"Create a new appointment for Monday","ttsVoice":"en-US-AriaNeural","stopTarget":{"text":"Stop"},"waitForSelector":".result"}. Recording duration auto-adapts to TTS speech length.'
     ),
   screenshot: z
     .boolean()
@@ -95,6 +96,7 @@ export async function interact(input: InteractInput): Promise<InteractResult> {
     error: actionResult.error,
     dialogMessage: dialogMessages[0],
     duration,
+    ...(actionResult.audioCachePath && { audioCachePath: actionResult.audioCachePath }),
   };
 }
 
@@ -105,6 +107,10 @@ export function formatInteractResult(result: InteractResult): string {
   text += ` (${result.duration}ms)\n`;
   text += `URL: ${result.pageState.url}\n`;
   text += `Title: ${result.pageState.title}\n`;
+
+  if (result.audioCachePath) {
+    text += `\nAudio cached: ${result.audioCachePath}\n`;
+  }
 
   if (result.dialogMessage) {
     text += `\nDialog: ${result.dialogMessage}\n`;

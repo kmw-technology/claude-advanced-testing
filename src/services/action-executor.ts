@@ -7,12 +7,15 @@ import {
   detectActionType,
   getWaitStrategy,
 } from "./spa-wait.js";
+import { writeFileSync, mkdirSync } from "fs";
+import { join } from "path";
 
 export interface ActionResult {
   success: boolean;
   error?: string;
   dialogMessage?: string;
   settlement?: SpaSettlementResult;
+  audioCachePath?: string;
 }
 
 export async function executeAction(
@@ -191,6 +194,94 @@ export async function executeAction(
           previousUrl,
         });
         return { success: true, settlement };
+      }
+
+      case "send_audio": {
+        if (!target)
+          throw new Error(
+            "send_audio requires a target (mic/record start button)"
+          );
+
+        // Parse optional config from value
+        const config = value ? JSON.parse(value) : {};
+        const recordDuration = config.recordDurationMs ?? 3000;
+        let audioCachePath: string | undefined;
+
+        // If ttsText is provided, generate real speech via Edge TTS
+        // and inject it as the fake microphone source
+        let adaptiveDuration = config.recordDurationMs ?? 3000;
+        if (config.ttsText) {
+          const { generateSpeech } = await import("./tts-service.js");
+          const { updateFakeAudio } = await import("./fake-media.js");
+
+          const speech = await generateSpeech(config.ttsText, config.ttsVoice);
+
+          // Adapt recording duration to speech length + 1s buffer
+          adaptiveDuration = Math.max(
+            config.recordDurationMs ?? 0,
+            speech.durationMs + 1000
+          );
+
+          // Cache the TTS audio for traceability
+          try {
+            const cacheDir = join(process.cwd(), "artifacts", "audio-cache");
+            mkdirSync(cacheDir, { recursive: true });
+            const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+            const filename = `tts-${timestamp}.mp3`;
+            audioCachePath = join(cacheDir, filename);
+            writeFileSync(audioCachePath, speech.buffer);
+            writeFileSync(
+              join(cacheDir, `tts-${timestamp}.meta.json`),
+              JSON.stringify({
+                timestamp: new Date().toISOString(),
+                ttsText: config.ttsText,
+                ttsVoice: speech.voice,
+                audioDurationMs: speech.durationMs,
+                audioSizeBytes: speech.buffer.length,
+                recordDurationMs: adaptiveDuration,
+                audioFile: filename,
+              }, null, 2)
+            );
+          } catch {
+            // Caching is best-effort
+          }
+
+          // Update the fake microphone source with TTS audio
+          await updateFakeAudio(page, speech.buffer.toString("base64"));
+        }
+
+        // 1. Click the mic/record button to start recording
+        const startLocator = resolveLocator(page, target);
+        await startLocator.click({ timeout });
+
+        // 2. Wait for the recording duration (adaptive if TTS was used)
+        await page.waitForTimeout(adaptiveDuration);
+
+        // 3. Click stop button or toggle the same button
+        if (config.stopTarget) {
+          const stopLocator = resolveLocator(page, config.stopTarget);
+          await stopLocator.click({ timeout });
+        } else {
+          await startLocator.click({ timeout });
+        }
+
+        // 4. Wait for transcription/result if selector provided
+        if (config.waitForSelector) {
+          await page.waitForSelector(config.waitForSelector, {
+            timeout: config.waitTimeout ?? 15000,
+          });
+        }
+
+        // 5. Wait for SPA settlement after the full flow
+        const audioSettlement = await waitForSpaSettlement(page, {
+          ...getWaitStrategy("submit"),
+          previousUrl,
+        });
+        return {
+          success: true,
+          settlement: audioSettlement,
+          ...(audioCachePath && { audioCachePath }),
+        };
       }
 
       default:

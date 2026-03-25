@@ -77,7 +77,7 @@ server.tool(
 // --- Tool 2: session ---
 server.tool(
   "session",
-  `Manage browser sessions. action="start" opens a persistent browser session for interactive testing (returns sessionId). action="end" closes it. Sessions preserve cookies, auth state, and navigation history across tool calls.`,
+  `Manage browser sessions. action="start" opens a persistent browser session for interactive testing (returns sessionId). action="end" closes it. Sessions preserve cookies, auth state, and navigation history across tool calls. Set fakeMedia=true to enable voice/audio testing with fake microphone.`,
   sessionSchema.shape,
   async (input) => {
     try {
@@ -130,7 +130,7 @@ server.tool(
 // --- Tool 3: interact ---
 server.tool(
   "interact",
-  "Interact with a webpage in an active session: click, fill, select, check, hover, press_key, scroll, navigate, submit. Target elements by text, label, placeholder, ARIA role, testId, or CSS selector. Returns page state after the action.",
+  "Interact with a webpage in an active session: click, fill, select, check, hover, press_key, scroll, navigate, submit, send_audio. Target elements by text, label, placeholder, ARIA role, testId, or CSS selector. Returns page state after the action. send_audio with ttsText generates real speech via Edge TTS (free, no API key), injects it as microphone input, and lets the app transcribe it naturally. Recording duration auto-adapts to speech length.",
   interactSchema.shape,
   async (input) => {
     try {

@@ -33,6 +33,19 @@ export const sessionSchema = z.object({
     .describe(
       'Device to emulate, e.g. "iPhone 14", "iPad Pro 11" (for start)'
     ),
+  fakeMedia: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe(
+      "Enable fake media device support for voice/audio testing. Auto-grants microphone permission. Requires url."
+    ),
+  fakeAudioBase64: z
+    .string()
+    .optional()
+    .describe(
+      "Base64-encoded WAV audio to use as fake microphone input. If omitted with fakeMedia=true, a sine wave tone is used."
+    ),
   // For end:
   sessionId: z
     .string()
@@ -57,6 +70,8 @@ export async function handleSession(
       width: input.width,
       height: input.height,
       deviceName: input.deviceName,
+      fakeMedia: input.fakeMedia,
+      fakeAudioBase64: input.fakeAudioBase64,
     });
 
     let pageState: PageState | undefined;

@@ -96,16 +96,22 @@ export function generateTestingPrompt(config: PersonaTestConfig): string {
     "2. Use the `interact` tool to perform actions (click, fill, navigate)."
   );
   lines.push(
-    "3. Use the `collect_feedback` tool to record findings as you discover them."
+    "3. After any action that should change state or produce a result, VERIFY: navigate to a different part of the app where the outcome should be reflected. A confirmation message is not proof — find independent evidence."
   );
   lines.push(
-    "4. Categorize findings: bug, ux_issue, confusion, accessibility_issue, performance_issue, missing_feature, or positive."
+    "4. When the app displays counts, statuses, or AI/chatbot responses — cross-check by navigating to the actual source data."
   );
   lines.push(
-    "5. Rate severity: critical (blocks the goal), major (significant friction), minor (small annoyance), positive (good experience)."
+    "5. Use the `collect_feedback` tool to record findings as you discover them."
   );
   lines.push(
-    "6. When done, call `end_persona_test` with the completed checklist items."
+    "6. Categorize findings: bug, ux_issue, confusion, accessibility_issue, performance_issue, missing_feature, or positive."
+  );
+  lines.push(
+    "7. Rate severity: critical (blocks the goal), major (significant friction), minor (small annoyance), positive (good experience)."
+  );
+  lines.push(
+    "8. When done, call `end_persona_test` with the completed checklist items."
   );
 
   return lines.join("\n");
@@ -159,9 +165,10 @@ function generateChecklist(persona: PersonaDefinition): string[] {
   items.push("Can I understand what this product/site does within 10 seconds?");
   items.push("Is the main navigation clear and usable?");
 
-  // Goal-based checklist
+  // Goal-based checklist with verification
   for (const goal of persona.goals) {
     items.push(`Can I accomplish: "${goal}"?`);
+    items.push(`After accomplishing "${goal}", can the result be independently verified elsewhere in the app?`);
   }
 
   // Tech-savviness based items
